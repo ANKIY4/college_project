@@ -43,6 +43,24 @@ CREATE TABLE IF NOT EXISTS registrations (
     INDEX idx_registrations_email (email)
 ) ENGINE=InnoDB;
 
+SET @events_has_is_active := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'events'
+      AND COLUMN_NAME = 'is_active'
+);
+SET @alter_events_is_active_sql := IF(
+    @events_has_is_active = 0,
+    'ALTER TABLE events ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER registration_close_at',
+    'SELECT 1'
+);
+PREPARE stmt_events_is_active FROM @alter_events_is_active_sql;
+EXECUTE stmt_events_is_active;
+DEALLOCATE PREPARE stmt_events_is_active;
+
+UPDATE events SET is_active = 1 WHERE is_active IS NULL;
+
 INSERT INTO users (name, email, password_hash, role)
 SELECT 'Default Admin', 'admin@example.com', '$2y$10$CucKZM0EgHZpw2HyWDDOvOd2LrVyO1kq9HXGZO1HzJw9oZaHmYrFC', 'admin'
 WHERE NOT EXISTS (

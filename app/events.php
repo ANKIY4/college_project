@@ -140,13 +140,40 @@ function is_registration_open($event)
     return registration_state($event) === 'open';
 }
 
+function events_has_is_active_column()
+{
+    static $hasColumn = null;
+
+    if ($hasColumn !== null) {
+        return $hasColumn;
+    }
+
+    try {
+        $statement = db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'events'
+              AND COLUMN_NAME = 'is_active'");
+        $hasColumn = ((int) $statement->fetchColumn()) > 0;
+    } catch (PDOException $exception) {
+        $hasColumn = false;
+    }
+
+    return $hasColumn;
+}
+
 function fetch_active_events()
 {
-    $statement = db()->query('SELECT e.*, u.name AS created_by_name
+    $sql = 'SELECT e.*, u.name AS created_by_name
         FROM events e
-        LEFT JOIN users u ON u.id = e.created_by
-        WHERE e.is_active = 1
-        ORDER BY e.event_date ASC, e.registration_open_at ASC');
+        LEFT JOIN users u ON u.id = e.created_by';
+
+    if (events_has_is_active_column()) {
+        $sql .= ' WHERE e.is_active = 1';
+    }
+
+    $sql .= ' ORDER BY e.event_date ASC, e.registration_open_at ASC';
+
+    $statement = db()->query($sql);
 
     return $statement->fetchAll();
 }
@@ -160,7 +187,7 @@ function fetch_event_by_id($eventId, $includeInactive = false)
         LEFT JOIN users u ON u.id = e.created_by
         WHERE e.id = :id';
 
-    if (!$includeInactive) {
+    if (!$includeInactive && events_has_is_active_column()) {
         $sql .= ' AND e.is_active = 1';
     }
 

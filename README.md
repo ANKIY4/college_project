@@ -20,6 +20,8 @@ A complete event management website with separate admin and user capabilities.
 5. Open the project in browser:
    - `http://localhost/event_management_collegeProject/index.php`
 
+If you already had an older database version, run `sql/setup.sql` again. It also applies safe schema upgrades (for example adding missing `events.is_active`).
+
 ### Terminal alternative
 ```bash
 /Applications/XAMPP/bin/mysql -uroot < sql/setup.sql
