@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../app/bootstrap.php';
 
 require_admin();
+$supportsIsActive = events_has_is_active_column();
 
 $eventId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $isEdit = $eventId > 0;
@@ -22,7 +23,7 @@ $formData = [
     'event_date' => $event ? $event['event_date'] : '',
     'registration_open_at' => $event ? utc_to_local_datetime_input($event['registration_open_at']) : '',
     'registration_close_at' => $event ? utc_to_local_datetime_input($event['registration_close_at']) : '',
-    'is_active' => $event ? (int) $event['is_active'] : 1,
+    'is_active' => ($supportsIsActive && $event && isset($event['is_active'])) ? (int) $event['is_active'] : 1,
 ];
 $errors = [];
 
@@ -36,7 +37,11 @@ if (is_post_request()) {
     $formData['event_date'] = clean_input(isset($_POST['event_date']) ? $_POST['event_date'] : '');
     $formData['registration_open_at'] = clean_input(isset($_POST['registration_open_at']) ? $_POST['registration_open_at'] : '');
     $formData['registration_close_at'] = clean_input(isset($_POST['registration_close_at']) ? $_POST['registration_close_at'] : '');
-    $formData['is_active'] = isset($_POST['is_active']) ? 1 : 0;
+    if ($supportsIsActive) {
+        $formData['is_active'] = isset($_POST['is_active']) ? 1 : 0;
+    } else {
+        $formData['is_active'] = 1;
+    }
 
     $errors = validate_event($formData);
 
@@ -57,45 +62,83 @@ if (is_post_request()) {
 
     if (empty($errors)) {
         if ($isEdit) {
-            $statement = db()->prepare('UPDATE events
-                SET title = :title,
-                    description = :description,
-                    venue = :venue,
-                    event_date = :event_date,
-                    registration_open_at = :registration_open_at,
-                    registration_close_at = :registration_close_at,
-                    is_active = :is_active
-                WHERE id = :id');
+            if ($supportsIsActive) {
+                $statement = db()->prepare('UPDATE events
+                    SET title = :title,
+                        description = :description,
+                        venue = :venue,
+                        event_date = :event_date,
+                        registration_open_at = :registration_open_at,
+                        registration_close_at = :registration_close_at,
+                        is_active = :is_active
+                    WHERE id = :id');
 
-            $statement->execute([
-                'title' => $formData['title'],
-                'description' => $formData['description'],
-                'venue' => $formData['venue'],
-                'event_date' => $formData['event_date'],
-                'registration_open_at' => $openUtc,
-                'registration_close_at' => $closeUtc,
-                'is_active' => $formData['is_active'],
-                'id' => $eventId,
-            ]);
+                $statement->execute([
+                    'title' => $formData['title'],
+                    'description' => $formData['description'],
+                    'venue' => $formData['venue'],
+                    'event_date' => $formData['event_date'],
+                    'registration_open_at' => $openUtc,
+                    'registration_close_at' => $closeUtc,
+                    'is_active' => $formData['is_active'],
+                    'id' => $eventId,
+                ]);
+            } else {
+                $statement = db()->prepare('UPDATE events
+                    SET title = :title,
+                        description = :description,
+                        venue = :venue,
+                        event_date = :event_date,
+                        registration_open_at = :registration_open_at,
+                        registration_close_at = :registration_close_at
+                    WHERE id = :id');
+
+                $statement->execute([
+                    'title' => $formData['title'],
+                    'description' => $formData['description'],
+                    'venue' => $formData['venue'],
+                    'event_date' => $formData['event_date'],
+                    'registration_open_at' => $openUtc,
+                    'registration_close_at' => $closeUtc,
+                    'id' => $eventId,
+                ]);
+            }
 
             flash('success', 'Event updated successfully.');
         } else {
             $currentUser = current_user();
-            $statement = db()->prepare('INSERT INTO events
-                (title, description, venue, event_date, registration_open_at, registration_close_at, is_active, created_by)
-                VALUES
-                (:title, :description, :venue, :event_date, :registration_open_at, :registration_close_at, :is_active, :created_by)');
+            if ($supportsIsActive) {
+                $statement = db()->prepare('INSERT INTO events
+                    (title, description, venue, event_date, registration_open_at, registration_close_at, is_active, created_by)
+                    VALUES
+                    (:title, :description, :venue, :event_date, :registration_open_at, :registration_close_at, :is_active, :created_by)');
 
-            $statement->execute([
-                'title' => $formData['title'],
-                'description' => $formData['description'],
-                'venue' => $formData['venue'],
-                'event_date' => $formData['event_date'],
-                'registration_open_at' => $openUtc,
-                'registration_close_at' => $closeUtc,
-                'is_active' => $formData['is_active'],
-                'created_by' => (int) $currentUser['id'],
-            ]);
+                $statement->execute([
+                    'title' => $formData['title'],
+                    'description' => $formData['description'],
+                    'venue' => $formData['venue'],
+                    'event_date' => $formData['event_date'],
+                    'registration_open_at' => $openUtc,
+                    'registration_close_at' => $closeUtc,
+                    'is_active' => $formData['is_active'],
+                    'created_by' => (int) $currentUser['id'],
+                ]);
+            } else {
+                $statement = db()->prepare('INSERT INTO events
+                    (title, description, venue, event_date, registration_open_at, registration_close_at, created_by)
+                    VALUES
+                    (:title, :description, :venue, :event_date, :registration_open_at, :registration_close_at, :created_by)');
+
+                $statement->execute([
+                    'title' => $formData['title'],
+                    'description' => $formData['description'],
+                    'venue' => $formData['venue'],
+                    'event_date' => $formData['event_date'],
+                    'registration_open_at' => $openUtc,
+                    'registration_close_at' => $closeUtc,
+                    'created_by' => (int) $currentUser['id'],
+                ]);
+            }
 
             flash('success', 'Event created successfully.');
         }
@@ -151,12 +194,14 @@ require __DIR__ . '/../templates/header.php';
             <small class="field-error" data-error-for="registration_close_at"><?php echo isset($errors['registration_close_at']) ? e($errors['registration_close_at']) : ''; ?></small>
         </div>
 
-        <div class="form-row">
-            <label>
-                <input type="checkbox" name="is_active" value="1" <?php echo $formData['is_active'] ? 'checked' : ''; ?> style="width:auto; margin-right:8px;">
-                Event is active and visible on user pages
-            </label>
-        </div>
+        <?php if ($supportsIsActive): ?>
+            <div class="form-row">
+                <label>
+                    <input type="checkbox" name="is_active" value="1" <?php echo $formData['is_active'] ? 'checked' : ''; ?> style="width:auto; margin-right:8px;">
+                    Event is active and visible on user pages
+                </label>
+            </div>
+        <?php endif; ?>
 
         <div class="actions">
             <button type="submit" class="btn btn-primary"><?php echo e($isEdit ? 'Update Event' : 'Create Event'); ?></button>

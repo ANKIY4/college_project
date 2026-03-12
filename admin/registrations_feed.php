@@ -35,16 +35,28 @@ try {
     $totalStatement->execute();
     $totalRegistrations = (int) $totalStatement->fetchColumn();
 
-    $perEventStatement = db()->prepare('SELECT
-            e.id,
-            e.title,
-            COUNT(r.id) AS registration_count
-        FROM events e
-        LEFT JOIN registrations r ON r.event_id = e.id
-        GROUP BY e.id, e.title, e.event_date, e.registration_open_at, e.is_active
-        HAVING e.is_active = :active OR COUNT(r.id) > 0
-        ORDER BY e.event_date ASC, e.registration_open_at ASC, e.id ASC');
-    $perEventStatement->execute(['active' => 1]);
+    if (events_has_is_active_column()) {
+        $perEventStatement = db()->prepare('SELECT
+                e.id,
+                e.title,
+                COUNT(r.id) AS registration_count
+            FROM events e
+            LEFT JOIN registrations r ON r.event_id = e.id
+            GROUP BY e.id, e.title, e.event_date, e.registration_open_at, e.is_active
+            HAVING e.is_active = :active OR COUNT(r.id) > 0
+            ORDER BY e.event_date ASC, e.registration_open_at ASC, e.id ASC');
+        $perEventStatement->execute(['active' => 1]);
+    } else {
+        $perEventStatement = db()->prepare('SELECT
+                e.id,
+                e.title,
+                COUNT(r.id) AS registration_count
+            FROM events e
+            LEFT JOIN registrations r ON r.event_id = e.id
+            GROUP BY e.id, e.title, e.event_date, e.registration_open_at
+            ORDER BY e.event_date ASC, e.registration_open_at ASC, e.id ASC');
+        $perEventStatement->execute();
+    }
     $perEventRows = $perEventStatement->fetchAll();
 
     $recentStatement = db()->prepare('SELECT
