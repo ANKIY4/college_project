@@ -140,6 +140,19 @@ function is_registration_open($event)
     return registration_state($event) === 'open';
 }
 
+function is_missing_column_error($exception, $columnName)
+{
+    if (!($exception instanceof PDOException)) {
+        return false;
+    }
+
+    if ((string) $exception->getCode() !== '42S22') {
+        return false;
+    }
+
+    return stripos($exception->getMessage(), (string) $columnName) !== false;
+}
+
 function events_has_is_active_column()
 {
     static $hasColumn = null;
@@ -163,17 +176,27 @@ function events_has_is_active_column()
 
 function fetch_active_events()
 {
-    $sql = 'SELECT e.*, u.name AS created_by_name
+    $baseSql = 'SELECT e.*, u.name AS created_by_name
         FROM events e
         LEFT JOIN users u ON u.id = e.created_by';
 
+    $sql = $baseSql;
     if (events_has_is_active_column()) {
         $sql .= ' WHERE e.is_active = 1';
     }
 
     $sql .= ' ORDER BY e.event_date ASC, e.registration_open_at ASC';
 
-    $statement = db()->query($sql);
+    try {
+        $statement = db()->query($sql);
+    } catch (PDOException $exception) {
+        if (!is_missing_column_error($exception, 'is_active')) {
+            throw $exception;
+        }
+
+        $fallbackSql = $baseSql . ' ORDER BY e.event_date ASC, e.registration_open_at ASC';
+        $statement = db()->query($fallbackSql);
+    }
 
     return $statement->fetchAll();
 }
@@ -187,14 +210,30 @@ function fetch_event_by_id($eventId, $includeInactive = false)
         LEFT JOIN users u ON u.id = e.created_by
         WHERE e.id = :id';
 
+    $usedIsActiveFilter = false;
     if (!$includeInactive && events_has_is_active_column()) {
         $sql .= ' AND e.is_active = 1';
+        $usedIsActiveFilter = true;
     }
 
     $sql .= ' LIMIT 1';
 
-    $statement = db()->prepare($sql);
-    $statement->execute(['id' => $eventId]);
+    try {
+        $statement = db()->prepare($sql);
+        $statement->execute(['id' => $eventId]);
+    } catch (PDOException $exception) {
+        if (!$usedIsActiveFilter || !is_missing_column_error($exception, 'is_active')) {
+            throw $exception;
+        }
+
+        $fallbackSql = 'SELECT e.*, u.name AS created_by_name
+            FROM events e
+            LEFT JOIN users u ON u.id = e.created_by
+            WHERE e.id = :id
+            LIMIT 1';
+        $statement = db()->prepare($fallbackSql);
+        $statement->execute(['id' => $eventId]);
+    }
 
     $event = $statement->fetch();
 
