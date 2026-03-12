@@ -15,15 +15,23 @@ A complete event management website with separate admin and user capabilities.
 
 ## Setup (XAMPP + phpMyAdmin)
 1. Open phpMyAdmin.
-2. Import `sql/schema.sql`.
-3. Import `sql/seed_admin.sql`.
+2. Import `sql/setup.sql` (single file: creates DB, tables, and seed data).
 4. Ensure MySQL credentials in `app/config.php` match your local setup.
 5. Open the project in browser:
    - `http://localhost/event_management_collegeProject/index.php`
 
+### Terminal alternative
+```bash
+/Applications/XAMPP/bin/mysql -uroot < sql/setup.sql
+```
+
 ## Default admin credentials
 - Email: `admin@example.com`
 - Password: `Admin@123`
+
+## Seeded test user credentials
+- Email: `student@example.com`
+- Password: `User@1234`
 
 ## Project structure
 - `app/` shared config, auth, DB, validation, CSRF, event utilities
